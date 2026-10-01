@@ -1,0 +1,19 @@
+== correctness ==
+reference=96128  spike=96128  MATCH
+== dynamic instruction count (minstret) ==
+hello from bare-metal RV64IMC
+dot(K=192) = 96128
+instructions = 1548   MACs = 192
+instr/MAC x100 = 806
+== instruction mix, dot_b0 only ==
+class                      count    share
+-----------------------------------------
+int ALU                      772    50.1%
+load                         384    24.9%
+branch                       193    12.5%
+multiply                     192    12.5%
+-----------------------------------------
+TOTAL                       1541
+== code size ==
+   text	   data	    bss	    dec	    hex	filename
+   2916	     16	    416	   3348	    d14	app.elf
