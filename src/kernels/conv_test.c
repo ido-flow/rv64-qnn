@@ -95,25 +95,96 @@ void conv2d_b0(void) {
     }
 }
 
+
+// -----------------------------------------------------------------------------
+// B1: software-optimized, SAME ISA, SAME arithmetic. Two changes vs B0:
+//
+//  1. OUTPUT TILING, 4 channels at once. B0 reads every window byte 64 times
+//     (once per output channel). B1 reads it once per 4 channels: one
+//     activation load now feeds four MACs, cutting load traffic ~2x. This is
+//     also a rehearsal for X1 — with xqmac8 the same trick runs 4 accumulator
+//     REGISTERS against one activation register (DESIGN.md §4.1 option A).
+//
+//  2. 8-WAY UNROLL over k. One loop branch + pointer bump per 8 taps instead
+//     of per tap. 576 % 8 == 0, so no tail loop (by model choice — K is a
+//     multiple of 8 everywhere except conv1, see DESIGN.md).
+//
+// The point of B1 (brief §4): separate what SOFTWARE can do on the stock ISA
+// from what the ISA extension adds. X1's speedup is measured against THIS,
+// not against naive B0 — otherwise the instruction gets credit for wins a
+// compiler-grade kernel already had.
+// -----------------------------------------------------------------------------
+__attribute__((noinline))
+void conv2d_b1(void) {
+    for (int oy = 0; oy < L_HO; oy++) {
+        for (int ox = 0; ox < L_WO; ox++) {
+            int p = 0;                       // window gather: same as B0
+            for (int ky = 0; ky < L_KH; ky++) {
+                int iy = oy * L_STRIDE - L_PAD_T + ky;
+                for (int kx = 0; kx < L_KW; kx++) {
+                    int ix = ox * L_STRIDE - L_PAD_L + kx;
+                    if (iy < 0 || iy >= L_H || ix < 0 || ix >= L_W) {
+                        for (int c = 0; c < L_CIN; c++) win[p++] = (int8_t)L_ZA;
+                    } else {
+                        const int8_t *src = &L_INPUT[(iy * L_W + ix) * L_CIN];
+                        for (int c = 0; c < L_CIN; c++) win[p++] = src[c];
+                    }
+                }
+            }
+            for (int oc = 0; oc < L_COUT; oc += 4) {
+                const int8_t *w0 = &L_WEIGHTS[(oc + 0) * L_K];
+                const int8_t *w1 = &L_WEIGHTS[(oc + 1) * L_K];
+                const int8_t *w2 = &L_WEIGHTS[(oc + 2) * L_K];
+                const int8_t *w3 = &L_WEIGHTS[(oc + 3) * L_K];
+                int32_t a0 = L_BIAS[oc + 0] - L_ZA * L_WSUM[oc + 0];
+                int32_t a1 = L_BIAS[oc + 1] - L_ZA * L_WSUM[oc + 1];
+                int32_t a2 = L_BIAS[oc + 2] - L_ZA * L_WSUM[oc + 2];
+                int32_t a3 = L_BIAS[oc + 3] - L_ZA * L_WSUM[oc + 3];
+                for (int k = 0; k < L_K; k += 8) {
+                    // one activation load feeds FOUR multiply-accumulates
+                    #define STEP(i) { int32_t x = win[k + (i)];          \
+                        a0 += x * (int32_t)w0[k + (i)];                  \
+                        a1 += x * (int32_t)w1[k + (i)];                  \
+                        a2 += x * (int32_t)w2[k + (i)];                  \
+                        a3 += x * (int32_t)w3[k + (i)]; }
+                    STEP(0) STEP(1) STEP(2) STEP(3)
+                    STEP(4) STEP(5) STEP(6) STEP(7)
+                    #undef STEP
+                }
+                int8_t *o = &out[(oy * L_WO + ox) * L_COUT + oc];
+                o[0] = requant(a0, L_M0[oc + 0], L_SHIFT[oc + 0], L_ZO);
+                o[1] = requant(a1, L_M0[oc + 1], L_SHIFT[oc + 1], L_ZO);
+                o[2] = requant(a2, L_M0[oc + 2], L_SHIFT[oc + 2], L_ZO);
+                o[3] = requant(a3, L_M0[oc + 3], L_SHIFT[oc + 3], L_ZO);
+            }
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     const uint64_t macs = (uint64_t)L_HO * L_WO * L_COUT * L_K;
-
-    uint64_t t0 = rd_instret();
-    conv2d_b0();
-    uint64_t t1 = rd_instret();
-    uint64_t n = t1 - t0;
-
-    // Bit-exact check against TFLite's own output for this layer.
-    long bad = 0, first = -1;
-    for (long i = 0; i < (long)sizeof(out); i++)
-        if (out[i] != L_EXPECTED[i]) { if (first < 0) first = i; bad++; }
-
-    printf("layer1.0.conv1 on RV64IMC (B0)\n");
-    printf("outputs = %ld   mismatches = %ld", (long)sizeof(out), bad);
-    if (bad) printf("   first at %ld: got %d want %d",
-                    first, out[first], L_EXPECTED[first]);
-    printf("\nMACs = %lu   instructions = %lu   instr/MAC x100 = %lu\n",
-           (unsigned long)macs, (unsigned long)n,
-           (unsigned long)(n * 100 / macs));
-    return bad ? 1 : 0;
+    struct { const char *name; void (*fn)(void); } runs[] = {
+        { "B0 naive    ", conv2d_b0 },
+        { "B1 tile4+u8 ", conv2d_b1 },
+    };
+    uint64_t ni[2];
+    printf("layer1.0.conv1, %lu MACs, bit-exact vs TFLite required\n",
+           (unsigned long)macs);
+    for (int r = 0; r < 2; r++) {
+        for (long i = 0; i < (long)sizeof(out); i++) out[i] = 0;  // no stale wins
+        uint64_t t0 = rd_instret();
+        runs[r].fn();
+        uint64_t t1 = rd_instret();
+        ni[r] = t1 - t0;
+        long bad = 0;
+        for (long i = 0; i < (long)sizeof(out); i++)
+            if (out[i] != L_EXPECTED[i]) bad++;
+        printf("%s  instr = %lu   instr/MAC x100 = %lu   mismatches = %ld\n",
+               runs[r].name, (unsigned long)ni[r],
+               (unsigned long)(ni[r] * 100 / macs), bad);
+        if (bad) return 1;
+    }
+    printf("B0/B1 instruction ratio x100 = %lu\n",
+           (unsigned long)(ni[0] * 100 / ni[1]));
+    return 0;
 }

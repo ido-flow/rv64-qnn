@@ -123,3 +123,22 @@ Notes:
   text; do it once on a cropped input or budget ~15 min. Deferred.
 - Verification chain now closed end-to-end: TFLite = numpy (E2) = bare-metal C
   (this). X1's xqmac8 kernel will be checked against the same expected output.
+
+---
+
+## E4 — B1: software-optimized kernel (same ISA)
+
+**Date** 2026-10-03 · **Reproduce** `make run-conv` (runs B0 and B1 back-to-back)
+
+4-channel output tiling (one window load feeds four accumulators) + 8-way
+unroll. Same arithmetic, same ISA, bit-exact.
+
+| kernel | instr | instr/MAC | vs B0 |
+|---|---:|---:|---:|
+| B0 naive | 824,959,988 | 7.13 | 1.00x |
+| **B1 tile4+unroll8** | **413,848,076** | **3.57** | **1.99x** |
+
+This is the software ceiling on the stock ISA (further tiling yields
+diminishing returns vs register pressure: 31 GPRs). X1's gain is measured
+against THIS line, per brief §4's B1 row — the ISA must beat the compiler's
+best, not the naive straw man.
