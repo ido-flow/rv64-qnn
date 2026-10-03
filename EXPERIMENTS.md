@@ -95,3 +95,31 @@ hardware; FC deviates ≤ ±1 on ≤3/1000 logits vs TFLite (argmax unaffected).
 
 Also this session: preprocessing confirmed (torchvision ImageNet), smoke test
 top-1 = "military uniform" on grace_hopper.jpg via the no-delegate interpreter.
+
+---
+
+## E3 — Real layer bit-exact on Spike (week-3 milestone)
+
+**Date** 2026-10-03 · **Reproduce** `python3 scripts/export_layer.py && make run-conv`
+
+`layer1.0.conv1` (3x3x64 -> 64, K=576, 115,605,504 MACs) as bare-metal C on
+Spike, input/weights/expected output extracted from the .tflite by
+`scripts/export_layer.py` into a self-contained 2 MB test-case header.
+
+| metric | value |
+|---|---|
+| mismatches vs TFLite | **0 / 200,704** |
+| dynamic instructions | 824,959,987 |
+| instr/MAC | **7.13** |
+| binary | text 443 KB, bss 201 KB |
+
+Notes:
+- 7.13 vs the toy kernel's 8.06 instr/MAC: the zero-point hoist is baked in
+  (the reference math defines it that way) and the im2col window gather
+  amortizes over all 64 output channels. Remaining B1 headroom: unroll + tile.
+- Spike throughput observed ~275 MIPS -> full-model B0 inference projects to
+  ~13 G instructions ≈ 45 s on Spike. Full-model runs are feasible.
+- Instruction-mix profiling of this layer via --log-commits streams ~50 GB of
+  text; do it once on a cropped input or budget ~15 min. Deferred.
+- Verification chain now closed end-to-end: TFLite = numpy (E2) = bare-metal C
+  (this). X1's xqmac8 kernel will be checked against the same expected output.
