@@ -1,0 +1,34 @@
+diff --git a/riscv/encoding.h b/riscv/encoding.h
+index 433bfe7..f08298f 100644
+--- a/riscv/encoding.h
++++ b/riscv/encoding.h
+@@ -1609,6 +1609,9 @@
+ #define MASK_MSLT 0xfe00707f
+ #define MATCH_MSLTU 0xda00603b
+ #define MASK_MSLTU 0xfe00707f
++/* custom-0: xqdot8 rd,rs1,rs2 — packed 8x int8 dot product (term project) */
++#define MATCH_XQDOT8 0xb
++#define MASK_XQDOT8 0xfe00707f
+ #define MATCH_MUL 0x2000033
+ #define MASK_MUL 0xfe00707f
+ #define MATCH_MUL_H00 0x8200303b
+@@ -5004,6 +5007,7 @@ DECLARE_INSN(msettm, MATCH_MSETTM, MASK_MSETTM)
+ DECLARE_INSN(msettn, MATCH_MSETTN, MASK_MSETTN)
+ DECLARE_INSN(mslt, MATCH_MSLT, MASK_MSLT)
+ DECLARE_INSN(msltu, MATCH_MSLTU, MASK_MSLTU)
++DECLARE_INSN(xqdot8, MATCH_XQDOT8, MASK_XQDOT8)
+ DECLARE_INSN(mul, MATCH_MUL, MASK_MUL)
+ DECLARE_INSN(mul_h00, MATCH_MUL_H00, MASK_MUL_H00)
+ DECLARE_INSN(mul_h01, MATCH_MUL_H01, MASK_MUL_H01)
+diff --git a/riscv/riscv.mk.in b/riscv/riscv.mk.in
+index df29533..bcd5c8e 100644
+--- a/riscv/riscv.mk.in
++++ b/riscv/riscv.mk.in
+@@ -91,6 +91,7 @@ riscv_gen_hdrs = \
+ 
+ 
+ riscv_insn_ext_i = \
++	xqdot8 \
+ 	add \
+ 	addi \
+ 	addiw \

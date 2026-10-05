@@ -142,3 +142,28 @@ This is the software ceiling on the stock ISA (further tiling yields
 diminishing returns vs register pressure: 31 GPRs). X1's gain is measured
 against THIS line, per brief §4's B1 row — the ISA must beat the compiler's
 best, not the naive straw man.
+
+---
+
+## E5 — X1-D: the custom instruction, measured (midterm core result)
+
+**Date** 2026-10-05 · **Reproduce** apply `src/spike/xqdot8-spike.patch`, rebuild Spike, `make run-conv`
+
+`xqdot8` (packed 8-lane INT8 dot product, custom-0, plain 2-read/1-write —
+DESIGN.md §4.1 option D) implemented in Spike and used by the X1 kernel on
+layer1.0.conv1. All three kernels bit-exact vs TFLite in one binary:
+
+| kernel | instr | instr/MAC | step | cumulative |
+|---|---:|---:|---:|---:|
+| B0 naive | 824,959,988 | 7.13 | — | 1.00x |
+| B1 tile4+unroll8 | 413,848,076 | 3.57 | 1.99x | 1.99x |
+| **X1-D xqdot8** | **75,926,769** | **0.66** | **5.45x** | **10.86x** |
+
+- Clears the brief's >=2x instruction-reduction target 5.4x over the
+  OPTIMIZED baseline (the honest comparison), 10.9x over naive.
+- Inner loop (see annotated disassembly in report notes): 17 instructions /
+  32 MACs — 5 ld, 4 xqdot8, 4 addw, 3 addi, 1 bne. Loads now outnumber MAC
+  instructions: the kernel is memory-bound. Next bottleneck = §7 memory
+  extensions (post-increment load deletes the 3 addi; dual issue overlaps ld
+  with xqdot8).
+- Custom-instruction count: 14,450,688 = exactly MACs/8. Utilization as spec'd.

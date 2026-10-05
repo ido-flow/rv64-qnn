@@ -143,7 +143,17 @@ xrq  rd, rs1                   // per output element
 ## 5. Open items before the week-4 freeze
 
 - [ ] conv1 K=147 handling (pad vs tail loop)
-- [ ] three-operand decision (A / B / C)
+- [x] **three-operand decision (2026-10-03): option D FIRST, A as a measured
+      increment.** `xqdot8 rd,rs1,rs2` returns the dot product WITHOUT
+      accumulating — plain 2-read/1-write, zero changes to the register file
+      or forwarding network; accumulation is an ordinary `add`. Costs ~45%
+      more instructions than the accumulating form (~0.5 vs ~0.28 instr/MAC)
+      but removes all core-surgery risk, and consecutive xqdot8 are
+      independent (latency-tolerant). The accumulating `xqmac8` (option A,
+      +1 regfile read port + forwarding) is the planned second increment,
+      evaluated against X1-D per the brief's incremental-evaluation rule.
+      Encoding: custom-0 (0x0B), funct3=000, funct7=0000000; funct3 001
+      reserved for xqmac8-A later.
 - [ ] exact CSR numbers for `XRQ_MULT` / `XRQ_CTRL`
 - [ ] funct7/funct3 allocation for future variants (W8A16, unsigned weights)
 - [x] **rounding mode SETTLED (2026-09-22, see EXPERIMENTS.md E2).** All 20 convs
