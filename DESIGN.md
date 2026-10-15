@@ -125,18 +125,21 @@ Fuses: fixed-point multiply → rounding shift → zero-point add → saturate t
 Replaces ~8-12 RV64IMC instructions including two data-dependent branches
 (RV64IMC has no `min`/`max` — those are in Zbb, which we do not have).
 
-**Per-channel resolution:** the model uses per-output-channel scales, which
-naively would force the parameters into a second source register. But per-channel
-means per *output channel*, and each output channel produces thousands of output
-elements (layer1: 3136 spatial positions). Looping **output-channel-outermost**,
-the scale is written to a CSR once per channel and reused across thousands of
-requantizations. **The cheap single-source form survives:**
+**Parameter delivery — CORRECTED 2026-10-15.** The CSR plan below assumed
+channel-outermost loops; the real kernels are **pixel-outermost** (that is what
+makes im2col window reuse work), so CSR writes would fire exactly as often as
+the requantizes they serve. Superseded by: pack all three per-channel constants
+into ONE 64-bit word, prepared offline, passed in rs2 —
 
 ```
-csrw XRQ_MULT, M0              // once per output channel
-csrw XRQ_CTRL, (n << 8) | zp   // once per output channel
-xrq  rd, rs1                   // per output element
+L_RQ[c] = M0 | (shift << 32) | (zp << 40)     // computed by export_layer.py
+xrq rd, rs1, rs2                               // rs1 = acc, rs2 = L_RQ[c]
 ```
+
+Plain 2-read/1-write (option-D philosophy), per-channel quantization handled
+with zero architectural state. Encoding: custom-0, funct3=001.
+(Original CSR sketch kept for the report's design-evolution narrative:
+`csrw XRQ_MULT, M0` / `csrw XRQ_CTRL, (n<<8)|zp` / `xrq rd, rs1`.)
 
 ---
 
@@ -154,7 +157,7 @@ xrq  rd, rs1                   // per output element
       evaluated against X1-D per the brief's incremental-evaluation rule.
       Encoding: custom-0 (0x0B), funct3=000, funct7=0000000; funct3 001
       reserved for xqmac8-A later.
-- [ ] exact CSR numbers for `XRQ_MULT` / `XRQ_CTRL`
+- [x] ~~CSR numbers for xrq~~ — no CSRs: params packed in rs2 (see §4.2 correction)
 - [ ] funct7/funct3 allocation for future variants (W8A16, unsigned weights)
 - [x] **rounding mode SETTLED (2026-09-22, see EXPERIMENTS.md E2).** All 20 convs
       (2.18 M outputs) match bit-exactly with a SINGLE rounding:

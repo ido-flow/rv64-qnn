@@ -167,3 +167,31 @@ layer1.0.conv1. All three kernels bit-exact vs TFLite in one binary:
   extensions (post-increment load deletes the 3 addi; dual issue overlaps ld
   with xqdot8).
 - Custom-instruction count: 14,450,688 = exactly MACs/8. Utilization as spec'd.
+
+---
+
+## E6 — xrq: the second required instruction + verification suite
+
+**Date** 2026-10-15 · **Reproduce** `make run-test && make run-conv` (Spike patch: `src/spike/`)
+
+`xrq rd, rs1, rs2`: int32 accumulator in rs1; M0/shift/zero-point packed per
+channel into one 64-bit rs2 word (prepared offline, `L_RQ[]`). Single-round E2
+semantics. Design note: the original CSR-parameter plan was CORRECTED — the
+kernels loop pixel-outermost (window reuse), so CSR writes would fire per
+output; rs2-packing keeps the 2-read/1-write option-D shape and handles
+per-channel naturally (DESIGN.md §4.2).
+
+**Verification (brief §5 functional):** `src/spike/isa_test.c` — directed
+corners + 20,000 randomized vectors per instruction vs independent C
+references: **40,144 vectors, 0 failures.**
+
+| kernel | instr | instr/MAC | step | cumulative |
+|---|---:|---:|---:|---:|
+| X1 xqdot8 | 75,926,769 | 0.657 | — | 10.86x |
+| **X2 + xrq** | **73,267,673** | **0.634** | **1.036x** | **11.26x** |
+
+The +3.6% is small BY STRUCTURE: requantize runs once per output element
+(200,704) vs 14.45M xqdot8 ops — Amdahl's law measured, per the incremental-
+evaluation rule. xrq's second effect — removing 2 data-dependent branches per
+output — is invisible to instruction counts and is a predicted CYCLE win to
+confirm on Wally RTL.

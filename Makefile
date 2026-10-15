@@ -57,6 +57,13 @@ conv.elf: $(BM)/crt.S $(BM)/syscalls.c src/kernels/conv_test.c src/kernels/layer
 run-conv: conv.elf
 	spike --isa=$(ARCH) conv.elf
 
+# Directed + randomized verification of xqdot8 and xrq against C references.
+test.elf: $(BM)/crt.S $(BM)/syscalls.c src/spike/isa_test.c $(BM)/test.ld
+	$(CC) $(CFLAGS) $(BM)/crt.S $(BM)/syscalls.c src/spike/isa_test.c -o $@ $(LDFLAGS)
+
+run-test: test.elf
+	spike --isa=$(ARCH) test.elf
+
 app.elf: $(SRCS) $(BM)/test.ld
 	$(CC) $(CFLAGS) $(SRCS) -o $@ $(LDFLAGS)
 	@$(SIZE) $@
@@ -76,6 +83,6 @@ fpcheck: app.elf
 	@$(OBJDUMP) -d app.elf | grep -cE '\s(f[a-z]+\.[sd]|flw|fld|fsw|fsd)\s' || echo 0
 
 clean:
-	rm -f app.elf conv.elf app.dump
+	rm -f app.elf conv.elf test.elf app.dump
 
-.PHONY: all dump run run-conv fpcheck clean
+.PHONY: all dump run run-conv run-test fpcheck clean

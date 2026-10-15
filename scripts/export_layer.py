@@ -66,6 +66,12 @@ assert (exp <= 0).all(), "positive exponent not supported by the kernel"
 shift_total = (31 - exp).astype(np.int64)        # single-round: >> (31 + rs)
 wsum = W.reshape(Cout, -1).astype(np.int64).sum(axis=1)
 
+# Packed per-channel constants for the xrq instruction (one 64-bit value:
+# M0 in [31:0], total shift in [39:32], output zero point in [47:40]).
+rq = (M0.astype(np.uint64)
+      | (shift_total.astype(np.uint64) << 32)
+      | (np.uint64(zo & 0xFF) << np.uint64(40)))
+
 def carr(name, ctype, arr):
     flat = np.asarray(arr).ravel()
     body = ",".join(str(int(v)) for v in flat)
@@ -102,6 +108,9 @@ with open("src/kernels/layer_data.h", "w") as f:
     f.write(carr("L_M0",       "int32_t", M0))
     f.write(carr("L_SHIFT",    "int32_t", shift_total))
     f.write(carr("L_WSUM",     "int32_t", wsum))
+    body = ",".join(f"0x{int(v):x}ULL" for v in rq)
+    f.write(f"static const uint64_t __attribute__((aligned(8))) "
+            f"L_RQ[{len(rq)}] = {{{body}}};\n")
     f.write(carr("L_EXPECTED", "int8_t",  Y))
 print(f"exported {TARGET}: in {A.shape} -> out {Y.shape}, K={kh*kw*Cin}, "
       f"stride={stride} pad=({pt},{pl}), za={za} zo={zo}")

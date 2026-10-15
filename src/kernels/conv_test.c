@@ -227,17 +227,84 @@ void conv2d_x1d(void) {
     }
 }
 
+
+// -----------------------------------------------------------------------------
+// X2: X1 plus the second required instruction.
+//
+//   xrq rd, rs1, rs2  —  rs1 = int32 accumulator; rs2 = per-channel constants
+//   packed offline into one 64-bit word (M0 | shift<<32 | zp<<40, see L_RQ);
+//   rd = the finished int8, single-round semantics of EXPERIMENTS.md E2.
+//
+// Replaces the ~13-instruction requant() — including its two data-dependent
+// branches, which will matter again on real hardware (mispredicts). Expected
+// gain here is MODEST (~3%: requantize runs once per OUTPUT, xqdot8 already
+// crushed the per-MAC work) — that smallness is itself a finding: Amdahl.
+// -----------------------------------------------------------------------------
+#define XRQ(d, acc, prm) \
+    __asm__ volatile(".insn r 0x0B, 1, 0, %0, %1, %2" : "=r"(d) : "r"(acc), "r"(prm))
+
+__attribute__((noinline))
+void conv2d_x2(void) {
+    for (int oy = 0; oy < L_HO; oy++) {
+        for (int ox = 0; ox < L_WO; ox++) {
+            int p = 0;
+            for (int ky = 0; ky < L_KH; ky++) {
+                int iy = oy * L_STRIDE - L_PAD_T + ky;
+                for (int kx = 0; kx < L_KW; kx++) {
+                    int ix = ox * L_STRIDE - L_PAD_L + kx;
+                    if (iy < 0 || iy >= L_H || ix < 0 || ix >= L_W) {
+                        for (int c = 0; c < L_CIN; c++) win[p++] = (int8_t)L_ZA;
+                    } else {
+                        const int8_t *src = &L_INPUT[(iy * L_W + ix) * L_CIN];
+                        for (int c = 0; c < L_CIN; c++) win[p++] = src[c];
+                    }
+                }
+            }
+            for (int oc = 0; oc < L_COUT; oc += 4) {
+                const int8_t *w0 = &L_WEIGHTS[(oc + 0) * L_K];
+                const int8_t *w1 = &L_WEIGHTS[(oc + 1) * L_K];
+                const int8_t *w2 = &L_WEIGHTS[(oc + 2) * L_K];
+                const int8_t *w3 = &L_WEIGHTS[(oc + 3) * L_K];
+                int32_t a0 = L_BIAS[oc + 0] - L_ZA * L_WSUM[oc + 0];
+                int32_t a1 = L_BIAS[oc + 1] - L_ZA * L_WSUM[oc + 1];
+                int32_t a2 = L_BIAS[oc + 2] - L_ZA * L_WSUM[oc + 2];
+                int32_t a3 = L_BIAS[oc + 3] - L_ZA * L_WSUM[oc + 3];
+                for (int k = 0; k < L_K; k += 8) {
+                    uint64_t x, y0, y1, y2, y3;
+                    memcpy(&x,  &win[k], 8);
+                    memcpy(&y0, &w0[k],  8);
+                    memcpy(&y1, &w1[k],  8);
+                    memcpy(&y2, &w2[k],  8);
+                    memcpy(&y3, &w3[k],  8);
+                    int64_t d0, d1, d2, d3;
+                    XQDOT8(d0, x, y0);  a0 += (int32_t)d0;
+                    XQDOT8(d1, x, y1);  a1 += (int32_t)d1;
+                    XQDOT8(d2, x, y2);  a2 += (int32_t)d2;
+                    XQDOT8(d3, x, y3);  a3 += (int32_t)d3;
+                }
+                int8_t *o = &out[(oy * L_WO + ox) * L_COUT + oc];
+                int64_t r0, r1, r2, r3;
+                XRQ(r0, a0, L_RQ[oc + 0]);  o[0] = (int8_t)r0;
+                XRQ(r1, a1, L_RQ[oc + 1]);  o[1] = (int8_t)r1;
+                XRQ(r2, a2, L_RQ[oc + 2]);  o[2] = (int8_t)r2;
+                XRQ(r3, a3, L_RQ[oc + 3]);  o[3] = (int8_t)r3;
+            }
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     const uint64_t macs = (uint64_t)L_HO * L_WO * L_COUT * L_K;
     struct { const char *name; void (*fn)(void); } runs[] = {
-        { "B0 naive     ", conv2d_b0 },
-        { "B1 tile4+u8  ", conv2d_b1 },
-        { "X1-D xqdot8  ", conv2d_x1d },
+        { "B0 naive       ", conv2d_b0 },
+        { "B1 tile4+u8    ", conv2d_b1 },
+        { "X1 xqdot8      ", conv2d_x1d },
+        { "X2 xqdot8+xrq  ", conv2d_x2 },
     };
-    uint64_t ni[3];
+    uint64_t ni[4];
     printf("layer1.0.conv1, %lu MACs, bit-exact vs TFLite required\n",
            (unsigned long)macs);
-    for (int r = 0; r < 3; r++) {
+    for (int r = 0; r < 4; r++) {
         for (long i = 0; i < (long)sizeof(out); i++) out[i] = 0;
         uint64_t t0 = rd_instret();
         runs[r].fn();
@@ -251,9 +318,10 @@ int main(int argc, char **argv) {
                (unsigned long)(ni[r] * 100 / macs), bad);
         if (bad) return 1;
     }
-    printf("ratios x100:  B0/B1 = %lu   B1/X1 = %lu   B0/X1 = %lu\n",
+    printf("ratios x100:  B0/B1 = %lu   B1/X1 = %lu   X1/X2 = %lu   B0/X2 = %lu\n",
            (unsigned long)(ni[0] * 100 / ni[1]),
            (unsigned long)(ni[1] * 100 / ni[2]),
-           (unsigned long)(ni[0] * 100 / ni[2]));
+           (unsigned long)(ni[2] * 100 / ni[3]),
+           (unsigned long)(ni[0] * 100 / ni[3]));
     return 0;
 }
