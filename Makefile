@@ -64,6 +64,10 @@ test.elf: $(BM)/crt.S $(BM)/syscalls.c src/spike/isa_test.c $(BM)/test.ld
 run-test: test.elf
 	spike --isa=$(ARCH) test.elf
 
+# One-output-row build for instruction-mix profiling (see scripts/run_mix.sh).
+mix.elf: $(SRCS) src/kernels/conv_test.c src/kernels/layer_data.h $(BM)/test.ld
+	$(CC) $(CFLAGS) -DRUN_HO=1 -Isrc/kernels $(BM)/crt.S $(BM)/syscalls.c src/kernels/conv_test.c -o $@ $(LDFLAGS)
+
 app.elf: $(SRCS) $(BM)/test.ld
 	$(CC) $(CFLAGS) $(SRCS) -o $@ $(LDFLAGS)
 	@$(SIZE) $@
@@ -83,6 +87,6 @@ fpcheck: app.elf
 	@$(OBJDUMP) -d app.elf | grep -cE '\s(f[a-z]+\.[sd]|flw|fld|fsw|fsd)\s' || echo 0
 
 clean:
-	rm -f app.elf conv.elf test.elf app.dump
+	rm -f app.elf conv.elf test.elf mix.elf app.dump
 
 .PHONY: all dump run run-conv run-test fpcheck clean

@@ -195,3 +195,32 @@ The +3.6% is small BY STRUCTURE: requantize runs once per output element
 evaluation rule. xrq's second effect — removing 2 data-dependent branches per
 output — is invisible to instruction counts and is a predicted CYCLE win to
 confirm on Wally RTL.
+
+---
+
+## E7 — Instruction mix per kernel + custom-instruction utilization
+
+**Date** 2026-10-19 · **Reproduce** `./scripts/run_mix.sh` · **Raw** `results/mix.txt`
+
+Method: RUN_HO=1 build (one output row; the mix is loop-invariant so one row's
+percentages are the layer's), one `--log-commits` run, PC-filtered per kernel.
+Caveat: row 0 is a boundary row (top padding), negligible for mix shares.
+
+| class | B0 | B1 | X1 | X2 |
+|---|---:|---:|---:|---:|
+| int ALU | 43.0% | 34.3% | 42.8% | 41.4% |
+| load | 28.3% | 35.6% | 26.9% | 27.7% |
+| scalar multiply | 14.1% | 28.1% | 0.3% | **0.0%** |
+| XQDOT8 | — | — | 19.4% | 20.1% |
+| XRQ | — | — | — | 0.3% |
+| branch | 14.3% | 1.5% | 8.0% | 7.8% |
+
+**Utilization (metric #7), measured exact:** XQDOT8 count = 258,048 = row MACs/8
+exactly; XRQ count = 3,584 = outputs exactly; scalar multiplies 3,752 -> 168
+(requantize multiplies absorbed by xrq).
+
+**Next-bottleneck reading:** in X2, loads + address arithmetic ~ 70% of retired
+instructions. Two named targets: (a) §7 memory extensions — post-increment
+load/store deletes the pointer-bump addi population, dual issue overlaps ld
+with XQDOT8; (b) software: the im2col window GATHER is now a visible share of
+int ALU — interior pixels could reuse 2 of 3 window rows (rolling window).

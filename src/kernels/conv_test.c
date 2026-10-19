@@ -19,6 +19,14 @@
 
 extern void *memcpy(void *, const void *, unsigned long);
 
+// RUN_HO: how many output rows to process (default: all). The mix build
+// (-DRUN_HO=1) runs one row so the commit log stays parseable — instruction
+// MIX is identical per row, only totals scale. Correctness is still checked,
+// against the first RUN_HO rows of the expected output.
+#ifndef RUN_HO
+#define RUN_HO L_HO
+#endif
+
 extern int printf(const char *, ...);
 void thread_entry(int cid, int nc) { while (cid != 0); }
 
@@ -62,7 +70,7 @@ static int8_t __attribute__((aligned(8))) win[L_K];
 
 __attribute__((noinline))
 void conv2d_b0(void) {
-    for (int oy = 0; oy < L_HO; oy++) {
+    for (int oy = 0; oy < RUN_HO; oy++) {
         for (int ox = 0; ox < L_WO; ox++) {
             // ---- gather the window (NHWC input, so each tap row is Cin
             //      contiguous bytes — one small memcpy-like loop per tap)
@@ -118,7 +126,7 @@ void conv2d_b0(void) {
 // -----------------------------------------------------------------------------
 __attribute__((noinline))
 void conv2d_b1(void) {
-    for (int oy = 0; oy < L_HO; oy++) {
+    for (int oy = 0; oy < RUN_HO; oy++) {
         for (int ox = 0; ox < L_WO; ox++) {
             int p = 0;                       // window gather: same as B0
             for (int ky = 0; ky < L_KH; ky++) {
@@ -180,7 +188,7 @@ void conv2d_b1(void) {
 
 __attribute__((noinline))
 void conv2d_x1d(void) {
-    for (int oy = 0; oy < L_HO; oy++) {
+    for (int oy = 0; oy < RUN_HO; oy++) {
         for (int ox = 0; ox < L_WO; ox++) {
             int p = 0;                       // window gather: same as B0/B1
             for (int ky = 0; ky < L_KH; ky++) {
@@ -245,7 +253,7 @@ void conv2d_x1d(void) {
 
 __attribute__((noinline))
 void conv2d_x2(void) {
-    for (int oy = 0; oy < L_HO; oy++) {
+    for (int oy = 0; oy < RUN_HO; oy++) {
         for (int ox = 0; ox < L_WO; ox++) {
             int p = 0;
             for (int ky = 0; ky < L_KH; ky++) {
@@ -294,7 +302,7 @@ void conv2d_x2(void) {
 }
 
 int main(int argc, char **argv) {
-    const uint64_t macs = (uint64_t)L_HO * L_WO * L_COUT * L_K;
+    const uint64_t macs = (uint64_t)RUN_HO * L_WO * L_COUT * L_K;
     struct { const char *name; void (*fn)(void); } runs[] = {
         { "B0 naive       ", conv2d_b0 },
         { "B1 tile4+u8    ", conv2d_b1 },
@@ -311,7 +319,8 @@ int main(int argc, char **argv) {
         uint64_t t1 = rd_instret();
         ni[r] = t1 - t0;
         long bad = 0;
-        for (long i = 0; i < (long)sizeof(out); i++)
+        const long n_out = (long)RUN_HO * L_WO * L_COUT;
+        for (long i = 0; i < n_out; i++)
             if (out[i] != L_EXPECTED[i]) bad++;
         printf("%s instr = %lu   instr/MAC x100 = %lu   mismatches = %ld\n",
                runs[r].name, (unsigned long)ni[r],

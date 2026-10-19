@@ -59,6 +59,8 @@ def classify(w, nbits):
     op = w & 0x7F
     if op in (0x33, 0x3B):                       # OP / OP-32: is it M-ext?
         return 'multiply' if ((w >> 25) & 0x7F) == 1 else 'int ALU'
+    if op == 0x0B:                               # custom-0: ours, split by funct3
+        return 'XQDOT8' if ((w >> 12) & 7) == 0 else 'XRQ'
     return OP32.get(op, f'unknown(0x{op:02x})')
 
 # Optional PC window (see USAGE above — without it, HTIF polling dominates).
