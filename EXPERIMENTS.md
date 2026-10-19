@@ -224,3 +224,27 @@ instructions. Two named targets: (a) §7 memory extensions — post-increment
 load/store deletes the pointer-bump addi population, dual issue overlaps ld
 with XQDOT8; (b) software: the im2col window GATHER is now a visible share of
 int ALU — interior pixels could reuse 2 of 3 window rows (rolling window).
+
+---
+
+## E8 — One complete residual block, bit-exact (coverage requirement closed)
+
+**Date** 2026-10-19 · **Reproduce** `python3 scripts/export_block.py && make run-block`
+
+layer1.0 end to end: conv1(+relu) -> conv2 -> quantized residual add(+relu),
+every stage checked against TFLite's own recorded tensor. The conv is now
+`conv2d_q()` — the X2 kernel parameterized by layer (the shape full-model
+inference will reuse). ADD semantics discovered empirically first
+(`scripts/ref_add.py`): all three rounding variants agree on real data; we
+adopt single-round for consistency with E2. The add's output stage is applied
+with the XRQ INSTRUCTION itself — xrq generalizes beyond convolutions.
+
+| stage | instr | mismatches |
+|---|---:|---:|
+| conv1 (231.2 MMAC total w/ conv2) | 69,554,877 | 0 |
+| conv2 | 69,554,877 | 0 |
+| residual add (+fused relu), 200,704 elems | 3,612,690 | 0 |
+| **block total** | **142,722,444** | **0** |
+
+Brief §5 evaluation coverage now complete: microbenchmark (E1 dot product),
+two major operators (conv E3-E6, residual add E8), one complete CNN block (E8).

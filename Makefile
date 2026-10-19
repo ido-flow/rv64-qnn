@@ -64,6 +64,13 @@ test.elf: $(BM)/crt.S $(BM)/syscalls.c src/spike/isa_test.c $(BM)/test.ld
 run-test: test.elf
 	spike --isa=$(ARCH) test.elf
 
+# One complete residual block (conv -> conv -> quantized add), staged checks.
+block.elf: $(BM)/crt.S $(BM)/syscalls.c src/kernels/block_test.c src/kernels/block_data.h $(BM)/test.ld
+	$(CC) $(CFLAGS) -Isrc/kernels $(BM)/crt.S $(BM)/syscalls.c src/kernels/block_test.c -o $@ $(LDFLAGS)
+
+run-block: block.elf
+	spike --isa=$(ARCH) block.elf
+
 # One-output-row build for instruction-mix profiling (see scripts/run_mix.sh).
 mix.elf: $(SRCS) src/kernels/conv_test.c src/kernels/layer_data.h $(BM)/test.ld
 	$(CC) $(CFLAGS) -DRUN_HO=1 -Isrc/kernels $(BM)/crt.S $(BM)/syscalls.c src/kernels/conv_test.c -o $@ $(LDFLAGS)
@@ -87,6 +94,6 @@ fpcheck: app.elf
 	@$(OBJDUMP) -d app.elf | grep -cE '\s(f[a-z]+\.[sd]|flw|fld|fsw|fsd)\s' || echo 0
 
 clean:
-	rm -f app.elf conv.elf test.elf mix.elf app.dump
+	rm -f app.elf conv.elf test.elf mix.elf block.elf app.dump
 
-.PHONY: all dump run run-conv run-test fpcheck clean
+.PHONY: all dump run run-conv run-test run-block fpcheck clean
