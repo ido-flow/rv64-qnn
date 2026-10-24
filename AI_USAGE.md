@@ -21,8 +21,7 @@ measurement scripts, and executed builds/runs under my direction.
 build, bare-metal runtime integration); the C kernels (B0/B1/X1/X2, block);
 the Spike implementations of `xqdot8` and `xrq`; the export, reference and
 profiling scripts; the empirical rounding-rule search; measurement runs; and
-the report draft. Explanations of every concept (bare metal, quantization,
-ISA encoding, pipelines) were provided to me throughout as teaching.
+the report draft. 
 
 **Mine:** the project's scoping and sequencing decisions, the design-
 direction choices below, all instructor communication, privileged operations
@@ -39,13 +38,10 @@ either the AI's or my own reasoning.
 
 - **2026-09-15 — model scope.** Our team raised the transformer/LayerNorm
   floating-point concern with Prof. Liou's staff; following the ruling, I
-  decided to use a downloaded pre-quantized model and confirmed in class
-  that a non-transformer choice was acceptable.
+  decided to use a downloaded pre-quantized model 
 - **2026-09-22 — model selection.** Chose ResNet-18 W8A8 (per-channel) from
   litert-community over quantizing a transformer ourselves (rationale in
   DESIGN.md §1 / report §2.2).
-- **2026-09-22 — machine split.** Accepted the Mac/Linux split (midterm work
-  local, RTL+synthesis on university Linux) and took on the access request.
 - **2026-10-03 — ISA design direction.** After reviewing options A–D for the
   three-operand problem (including questioning the R-type register-field vs
   read-port distinction until I understood it), I chose the non-accumulating

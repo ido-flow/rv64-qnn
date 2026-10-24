@@ -4,3 +4,5 @@ __pycache__/
 *.o
 results/*.log
 .DS_Store
+node_modules/
+~$*
