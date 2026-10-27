@@ -62,9 +62,9 @@ s.addText("Accelerating quantized ResNet-18 inference on RV64IMC\nMidterm: ISA d
   s.addText(b, { x, y: 4.95, w: 2.8, h: 0.5, fontFace: HEAD, fontSize: 22, bold: true, color: LTCOP, align: "center", margin: 0, isTextBox: true });
   s.addText(t, { x, y: 5.44, w: 2.8, h: 0.35, fontFace: BODY, fontSize: 11, color: ICE, align: "center", margin: 0, isTextBox: true });
 });
-s.addText("Ido Ifergan   -   <course / team — fill in>", { x: 0.9, y: 6.55, w: 11.5, h: 0.4,
+s.addText("Ido Ifergan   -   <course name — fill in>", { x: 0.9, y: 6.55, w: 11.5, h: 0.4,
   fontFace: BODY, fontSize: 13, color: GREY, align: "center", margin: 0, isTextBox: true });
-s.addNotes("The project in one sentence: a minimal RISC-V core runs integer neural-network inference badly for a structural reason, we measured exactly why, added the two smallest instructions that fix it, and proved every step bit-exact against the deployed model. Headlines: 5.6x over an OPTIMIZED software baseline, verified on 40,144 test vectors with zero failures.");
+s.addNotes("(~15 sec) One sentence: a minimal RISC-V core runs integer neural-network inference badly for a structural reason; we measured why, added the two smallest instructions that fix it, and proved every step bit-exact against the deployed model itself.");
 
 // S2 PROBLEM MEASURED ----------------------------------------------------
 s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Problem" });
@@ -84,31 +84,9 @@ s.addChart("bar", [{ name: "share of instructions", labels: ["int ALU", "load", 
   valAxisMaxVal: 50, showTitle: true, title: "Where the baseline's instructions go (B0, real layer)",
   titleFontFace: HEAD, titleFontSize: 13, titleColor: INK,
 });
-s.addNotes("We measured before designing anything. The naive kernel spends 8.06 instructions per MAC - verified three independent ways: the minstret hardware counter, the PC-filtered instruction trace, and the disassembly itself (8 instructions in the loop body). Only the copper bar is real work. Everything else is the overhead of feeding one byte at a time through a 64-bit machine.");
-
-// S3 WHY -----------------------------------------------------------------
-s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Problem" });
-s.addText("One register, eight numbers - one interpretation", { placeholder: "title" });
-regStrip(s, 1.7, 1.55, 10, ["w7","w6","w5","w4","w3","w2","w1","w0"], PANEL, INK, 0.6);
-s.addText("a single ld fills a register with eight consecutive INT8 weights - for free, since day one", {
-  x: 1.7, y: 2.2, w: 10, h: 0.32, fontFace: BODY, fontSize: 12.5, color: MUT, align: "center", margin: 0, isTextBox: true });
-card(s, 0.7, 3.0, 5.9, 2.9);
-s.addText("What the base ISA sees", { x: 0.95, y: 3.2, w: 5.4, h: 0.4, fontFace: HEAD, fontSize: 16, bold: true, color: STEEL, margin: 0, isTextBox: true });
-s.addText([
-  { text: "Every instruction: the register is ONE 64-bit number", options: { bullet: true, breakLine: true } },
-  { text: "One carry chain ripples across all 64 bits - carries leak across byte boundaries", options: { bullet: true, breakLine: true } },
-  { text: "So software must extract bytes one at a time: lb, lb, mul ... eight round trips", options: { bullet: true } },
-], { x: 0.95, y: 3.65, w: 5.4, h: 2.1, fontFace: BODY, fontSize: 13.5, color: MUT, paraSpaceAfter: 8, margin: 0, isTextBox: true });
-card(s, 6.85, 3.0, 5.9, 2.9);
-s.addText("What xqdot8 adds", { x: 7.1, y: 3.2, w: 5.4, h: 0.4, fontFace: HEAD, fontSize: 16, bold: true, color: COPPER, margin: 0, isTextBox: true });
-s.addText([
-  { text: "The MISSING INTERPRETATION: these 64 bits are 8 signed lanes", options: { bullet: true, breakLine: true } },
-  { text: "Multiply lane-by-lane, carries fenced, sum the 8 products", options: { bullet: true, breakLine: true } },
-  { text: "No new datapath width - the wires were already paid for", options: { bullet: true } },
-], { x: 7.1, y: 3.65, w: 5.4, h: 2.1, fontFace: BODY, fontSize: 13.5, color: MUT, paraSpaceAfter: 8, margin: 0, isTextBox: true });
-s.addText("Bits have no inherent meaning - instructions assign it. We added meaning, not hardware width.", {
-  x: 0.7, y: 6.25, w: 12, h: 0.45, fontFace: HEAD, fontSize: 15, bold: true, color: INK, align: "center", margin: 0, isTextBox: true });
-s.addNotes("The deep reason the waste exists: bits have no inherent meaning - the instruction decides the interpretation. Base RISC-V interprets every register as one number with one carry chain, so you cannot fake lanes with add: a carry from byte 0 corrupts byte 1. SIMD lanes are exactly the interpretation that is missing - the V and P extensions provide it in general, our core has neither, and xqdot8 is the narrow, measurement-justified version.");
+s.addText("A 64-bit register already carries eight INT8 values - the base ISA just reads them as ONE number. We add the missing interpretation, not hardware width.", {
+  x: 0.7, y: 6.58, w: 12, h: 0.45, fontFace: HEAD, fontSize: 13.5, bold: true, color: INK, align: "center", margin: 0, isTextBox: true });
+s.addNotes("(~55 sec) We measured before designing. The naive kernel spends 8.06 instructions per MAC - confirmed three independent ways: the minstret hardware counter, the PC-filtered instruction trace, and the disassembly itself, which shows exactly 8 instructions in the loop body. Only the copper bar is real work. The reason is structural: a 64-bit register already holds eight INT8 values, but every base instruction reads it as ONE number with one carry chain - so software must feed the machine one byte at a time. The fix is an interpretation, not more hardware.");
 
 // S4 METHOD --------------------------------------------------------------
 pres.addSection({ title: "Design" });
@@ -134,7 +112,7 @@ chain.forEach(([a, b], i) => {
   s.addText(b, { x: 5.7, y, w: 7.0, h: 0.56, fontFace: BODY, fontSize: 12.5, color: MUT, valign: "middle", margin: 0, isTextBox: true });
   if (i < 3) s.addText("v  0 mismatches", { x: 1.75, y: y + 0.53, w: 3.6, h: 0.22, fontFace: MONO, fontSize: 9, color: TEAL, margin: 0, isTextBox: true });
 });
-s.addNotes("The loop is the point, not just the artifact. And the loop is enforceable because everything is integer: equality is transitive, so we can demand ZERO mismatches at every link rather than 'close enough'. Each link isolates one translation - understanding the math, porting it, implementing the instructions - so any failure names its own culprit. The NumPy file is the specification the hardware implements.");
+s.addNotes("(~45 sec) The loop is the point, not just the artifact - and it is enforceable because everything is integer: equality is transitive, so we demand ZERO mismatches at every link, never close-enough. Each link isolates one translation - understanding the math, porting it, implementing the instructions - so any failure names its own culprit. The NumPy file is the specification the hardware implements.");
 
 // S5 WORKLOAD ------------------------------------------------------------
 s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Design" });
@@ -156,7 +134,7 @@ card(s, 8.4, 1.8, 4.3, 4.7);
 stat(s, 8.7, 2.05, 3.8, "98%", "of arithmetic is MACs", COPPER, 40);
 stat(s, 8.7, 3.4, 3.8, "0", "normalization ops in the deployed\ngraph - BatchNorm folded away", INK, 40);
 stat(s, 8.7, 4.8, 3.8, "free", "ReLU: output zero point is -128,\nso the int8 clamp IS the ReLU", TEAL, 40);
-s.addNotes("The workload: ResNet-18, 1.81 GMAC per image, already quantized to int8 - we performed no quantization ourselves, as directed. 98 percent of its arithmetic is multiply-accumulates, and every inner dimension is a multiple of eight, so the 8-lane instruction tiles every layer exactly. If asked why not a transformer, the full chain: we were directed to use pre-quantized downloads; no pre-quantized vision transformer was available at the designated source; and transformers carry LayerNorm, which needs the live input's statistics and cannot be folded away - ResNet's BatchNorm folds into the weights offline and vanishes from the deployed graph. ResNet-18 was also the highest-compute candidate, giving the most headroom to demonstrate speedup.");
+s.addNotes("(~40 sec) ResNet-18, 1.81 GMAC per image, already quantized - we performed no quantization ourselves, as directed. 98 percent of its arithmetic is MACs, and every inner dimension is a multiple of eight, so the 8-lane instruction tiles every layer exactly. If asked why not a transformer: no pre-quantized vision transformer was available to download, and LayerNorm needs the live input statistics and cannot fold away - ResNet BatchNorm folds into the weights offline and vanishes.");
 
 // S6 INSTRUCTIONS --------------------------------------------------------
 s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Design" });
@@ -181,7 +159,7 @@ s.addText([
 regStrip(s, 2.7, 6.15, 8, ["funct7", "rs2", "rs1", "f3", "rd", "0001011"], PANEL, INK, 0.45);
 s.addText("standard R-type encoding on the reserved custom-0 opcode", { x: 2.7, y: 6.63, w: 8, h: 0.3,
   fontFace: BODY, fontSize: 10.5, color: GREY, align: "center", margin: 0, isTextBox: true });
-s.addNotes("Both instructions obey one discipline: two reads, one write, like mul - so nothing in the existing core changes. The MAC-vs-dot decision is the key design point: accumulating needs a third register-file read port plus forwarding changes; we defer that to the RTL phase as a measured increment. xrq's story shows the method twice: its rounding was discovered empirically (TFLite is even internally inconsistent - its FC uses a different backend's rounding), and its parameter delivery was redesigned when measurement showed the CSR plan fired per output element.");
+s.addNotes("(~60 sec) Both instructions obey one discipline: two reads, one write, like mul - nothing in the existing core changes. The MAC-versus-dot decision is the key design point: accumulating needs a third register-file read port plus forwarding changes; we defer that to the RTL phase as a measured increment. xrq shows the method twice: its rounding was discovered empirically - TFLite is even internally inconsistent, its FC layer rounds differently - and its parameter delivery was redesigned when measurement showed the CSR plan would fire per output element.");
 
 // S7 RESULTS -------------------------------------------------------------
 pres.addSection({ title: "Results" });
@@ -201,70 +179,130 @@ card(s, 9.0, 1.5, 3.7, 5.2);
 stat(s, 9.3, 1.75, 3.2, "5.6x", "vs the OPTIMIZED baseline\n(the honest comparison)", COPPER, 44);
 stat(s, 9.3, 3.25, 3.2, "11.3x", "vs naive - mentioned,\nnot the headline", INK, 36);
 stat(s, 9.3, 4.6, 3.2, ">=2x", "the project target -\ncleared 2.8x over", TEAL, 36);
-s.addNotes("Evaluated incrementally, as required. Software alone: 1.99x - that is why B1 exists, so the instruction is not credited with gains a compiler-grade kernel already had. xqdot8: 5.45x on top. xrq adds 3.6% - small BY STRUCTURE: requantize runs once per output against 14.5 million packed MACs; that is Amdahl's law measured, and its real payoff - removing two data-dependent branches per output - is a cycle-domain effect only the RTL phase can show. Headline: 5.6x against the optimized baseline.");
+s.addText("Utilization exact: xqdot8 = MACs/8\n(14,450,688); xrq = 1 per output.\nScalar multiplies: 2,068,136 -> 168.", {
+  x: 9.3, y: 5.75, w: 3.2, h: 0.85, fontFace: BODY, fontSize: 10.5, color: MUT, margin: 0, isTextBox: true });
+s.addNotes("(~60 sec) Evaluated incrementally, as required. Software alone gives 1.99x - that is why B1 exists: the instruction must not be credited with gains a compiler-grade kernel already had. xqdot8 gives 5.45x on top; xrq adds 3.6 percent, small BY STRUCTURE - requantize runs once per output against 14.5 million packed MACs; Amdahl, measured. The mix confirms the mechanism: scalar multiplies fall from 2.07 million to 168, absorbed by exactly MACs-over-eight xqdot8 operations and one xrq per output - the units are never idle, never redundant. Headline: 5.6x against the optimized baseline.");
 
-// S8 MIX -----------------------------------------------------------------
-s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Results" });
-s.addText("The scalar multiply column dies", { placeholder: "title" });
-s.addChart("bar", [
-  { name: "scalar multiply %", labels: ["B0", "B1", "X1", "X2"], values: [14.1, 28.1, 0.3, 0.0] },
-  { name: "custom instructions %", labels: ["B0", "B1", "X1", "X2"], values: [0, 0, 19.4, 20.4] },
-], {
-  x: 0.6, y: 1.5, w: 7.6, h: 5.2, barDir: "col", ...chartAxis,
-  chartColors: [STEEL, COPPER], valAxisMaxVal: 30,
-  showLegend: true, legendPos: "t", legendColor: MUT, legendFontFace: BODY, legendFontSize: 12,
-  showValue: true, dataLabelPosition: "outEnd", dataLabelColor: INK, dataLabelFontSize: 11, dataLabelFormatCode: '0.0"%"',
-  showTitle: true, title: "Instruction mix share by kernel (E7)", titleFontFace: HEAD, titleFontSize: 13, titleColor: INK,
+// CLOSE — verified + next bottleneck (merged) -----------------------------
+pres.addSection({ title: "Close" });
+s = pres.addSlide({ masterName: "DARK", sectionTitle: "Close" });
+s.addText("Verified end to end - and the next bottleneck is measured", { x: 0.8, y: 0.5, w: 11.7, h: 0.65,
+  fontFace: HEAD, fontSize: 28, bold: true, color: WHITE, margin: 0, isTextBox: true });
+[["40,144 / 0", "directed + randomized vectors vs independent references - zero failures"],
+ ["bit-exact block", "a complete residual block, conv-conv-add; xrq generalizes to the add"],
+ ["650 B", "X2 kernel code: half the size of optimized B1, 5.6x faster; zero FP instructions"]].forEach(([b, t], i) => {
+  const x = 0.8 + i * 4.03;
+  s.addShape("roundRect", { x, y: 1.5, w: 3.75, h: 1.6, rectRadius: 0.08, fill: { color: "202A3C" }, line: { color: STEEL, width: 1 } });
+  s.addText(b, { x: x + 0.22, y: 1.64, w: 3.3, h: 0.5, fontFace: HEAD, fontSize: 21, bold: true, color: LTCOP, margin: 0, isTextBox: true });
+  s.addText(t, { x: x + 0.22, y: 2.16, w: 3.3, h: 0.9, fontFace: BODY, fontSize: 11, color: ICE, margin: 0, isTextBox: true });
 });
-card(s, 8.5, 1.5, 4.2, 5.2);
-s.addText("Utilization is EXACT", { x: 8.75, y: 1.7, w: 3.7, h: 0.4, fontFace: HEAD, fontSize: 16, bold: true, color: INK, margin: 0, isTextBox: true });
-s.addText([
-  { text: "xqdot8 retired = MACs / 8, precisely (258,048 per row; 14,450,688 per layer)", options: { bullet: true, breakLine: true } },
-  { text: "xrq retired = 1 per output element, precisely (3,584 / row)", options: { bullet: true, breakLine: true } },
-  { text: "Scalar multiplies: 2,068,136 -> 168 (the identical count in B0 and B1 proves same work, different wrapping)", options: { bullet: true, breakLine: true } },
-  { text: "The units are never idle-issued, never redundant", options: { bullet: true } },
-], { x: 8.75, y: 2.2, w: 3.7, h: 4.3, fontFace: BODY, fontSize: 12.5, color: MUT, paraSpaceAfter: 8, margin: 0, isTextBox: true });
-s.addNotes("Metric 7, custom-instruction utilization, measured exactly: one xqdot8 per eight MACs and one xrq per output - to the instruction. The steel bars are the scalar multiply population: identical count in B0 and B1 (same arithmetic, different wrapping), then absorbed entirely by the copper bars. The 168 residual multiplies are address computation.");
-
-// S9 VERIFIED ------------------------------------------------------------
-s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Results" });
-s.addText("Correct, verified - and smaller", { placeholder: "title" });
-const tiles = [
-  ["40,144", "directed + randomized vectors\nagainst independent C references\n0 failures", COPPER],
-  ["2.18 M", "conv outputs matched bit-exactly\nacross all 20 layers when deriving\nthe rounding spec", STEEL],
-  ["142.7 M", "instructions: a COMPLETE residual\nblock (conv-conv-add), bit-exact\nat every stage; xrq generalizes\nto the residual add", TEAL],
-  ["650 B", "X2 kernel code - HALF of B1's\n1,320 B while 5.6x faster; and 0\nfloating-point instructions in\nevery binary (required)", INK],
-];
-tiles.forEach(([big, small, color], i) => {
-  const x = 0.7 + (i % 2) * 6.2, y = 1.55 + Math.floor(i / 2) * 2.6;
-  card(s, x, y, 5.9, 2.35);
-  s.addText(big, { x: x + 0.3, y: y + 0.22, w: 5.3, h: 0.7, fontFace: HEAD, fontSize: 38, bold: true, color, margin: 0, isTextBox: true });
-  s.addText(small, { x: x + 0.3, y: y + 0.95, w: 5.3, h: 1.3, fontFace: BODY, fontSize: 12.5, color: MUT, margin: 0, isTextBox: true });
+s.addText("What remains, measured: loads + address arithmetic are ~70% of X2 instructions - the inner loop issues 5 loads against 4 MAC operations. The RTL phase is scoped on exactly that:", {
+  x: 0.8, y: 3.45, w: 11.7, h: 0.6, fontFace: BODY, fontSize: 13.5, color: ICE, margin: 0, isTextBox: true });
+[["Post-increment load/store", "folds pointer bumps into loads: -18% of the inner loop, measurable in Spike first"],
+ ["Accumulating xqmac8", "the deferred variant - synthesis prices its 3rd read port; projected 0.31 instr/MAC"],
+ ["Dual issue / pipelined cache", "cycle-domain attacks on the same 70% - invisible to instruction counts by design"]].forEach(([a, b], i) => {
+  const y = 4.2 + i * 0.72;
+  s.addShape("roundRect", { x: 0.8, y, w: 11.7, h: 0.6, rectRadius: 0.06, fill: { color: "202A3C" }, line: { color: STEEL, width: 1 } });
+  s.addText(a, { x: 1.05, y, w: 3.95, h: 0.6, fontFace: HEAD, fontSize: 13.5, bold: true, color: LTCOP, valign: "middle", margin: 0, isTextBox: true });
+  s.addText(b, { x: 5.15, y, w: 7.15, h: 0.6, fontFace: BODY, fontSize: 12, color: ICE, valign: "middle", margin: 0, isTextBox: true });
 });
-s.addNotes("Verification is layered: the bit-exact chain against the deployed model, plus a directed-and-randomized suite against independent reference implementations - 40,144 vectors, zero failures. The residual block completes the required evaluation coverage and shows xrq is a general primitive: the residual add's output stage runs through the same instruction. And a result we did not expect until we measured it: the extension beats optimized software on code size too - half of B1's bytes.");
-
-// S10 NEXT / CLOSE -------------------------------------------------------
-pres.addSection({ title: "Next" });
-s = pres.addSlide({ masterName: "DARK", sectionTitle: "Next" });
-s.addText("The next bottleneck is already measured: memory", { x: 0.8, y: 0.55, w: 11.7, h: 0.7,
-  fontFace: HEAD, fontSize: 30, bold: true, color: WHITE, margin: 0, isTextBox: true });
-s.addText("After X2: loads + address arithmetic = ~70% of remaining instructions. The inner loop issues 5 loads against 4 MAC operations.", {
-  x: 0.8, y: 1.35, w: 11.7, h: 0.55, fontFace: BODY, fontSize: 15, color: ICE, margin: 0, isTextBox: true });
-const plan = [
-  ["Post-increment load/store", "folds pointer bumps into loads: -18% of the inner loop, measurable in Spike first"],
-  ["Accumulating xqmac8 (option A)", "the deferred variant - synthesis prices its 3rd read port; projected 0.31 instr/MAC"],
-  ["Dual issue / pipelined cache", "cycle-domain attacks on the same 70% - invisible to instruction counts by design"],
-];
-plan.forEach(([a, b], i) => {
-  const y = 2.3 + i * 1.0;
-  s.addShape("roundRect", { x: 0.8, y, w: 11.7, h: 0.85, rectRadius: 0.06, fill: { color: "202A3C" }, line: { color: STEEL, width: 1 } });
-  s.addText(a, { x: 1.05, y: y + 0.08, w: 4.3, h: 0.7, fontFace: HEAD, fontSize: 14.5, bold: true, color: LTCOP, valign: "middle", margin: 0, isTextBox: true });
-  s.addText(b, { x: 5.5, y: y + 0.08, w: 6.8, h: 0.7, fontFace: BODY, fontSize: 12.5, color: ICE, valign: "middle", margin: 0, isTextBox: true });
-});
-s.addText("Hypotheses carried to RTL: xrq's branch elimination beats its 3.6% instruction saving - the 8-lane unit's adder tree does not touch Fmax - endgame metric: speedup per unit area (Synopsys DC, SAED 32/28nm)", {
-  x: 0.8, y: 5.5, w: 11.7, h: 0.75, fontFace: BODY, fontSize: 12.5, italic: true, color: GREY, margin: 0, isTextBox: true });
 s.addText("bit-exact   -   5.6x over optimized software   -   zero core surgery   -   ready for RTL", {
-  x: 0.8, y: 6.5, w: 11.7, h: 0.5, fontFace: HEAD, fontSize: 17, bold: true, color: LTCOP, align: "center", margin: 0, isTextBox: true });
-s.addNotes("We end on the closing question: what becomes the bottleneck after the optimization? Measured answer: memory - 70% of what remains is loads and addressing. The RTL phase is scoped around that: post-increment addressing, the accumulating variant priced by synthesis, dual issue for the cycle domain. Everything from here is a hypothesis with a named instrument to test it.");
+  x: 0.8, y: 6.55, w: 11.7, h: 0.5, fontFace: HEAD, fontSize: 16, bold: true, color: LTCOP, align: "center", margin: 0, isTextBox: true });
+s.addNotes("(~50 sec) Correctness in three tiles: forty thousand directed and randomized vectors, zero failures; a complete residual block bit-exact at every stage, with xrq reused for the residual add output - the primitive generalizes; and a result we only believed after measuring: the extension also HALVES code size versus the optimized kernel. The closing question answers itself in the data: what remains is seventy percent loads and addressing, and the RTL phase attacks exactly that - post-increment addressing, the accumulating variant priced by synthesis, and dual issue. Thank you.");
+
+// ===== APPENDIX — experimental record (not part of the 5-6 min talk) =====
+pres.addSection({ title: "Appendix" });
+s = pres.addSlide({ masterName: "DARK", sectionTitle: "Appendix" });
+s.addText("Appendix", { x: 0.9, y: 2.6, w: 11.5, h: 0.9, fontFace: HEAD, fontSize: 40, bold: true, color: WHITE, align: "center", margin: 0, isTextBox: true });
+s.addText("Experimental results and analysis (E1-E8), beyond the talk.\nEvery number regenerates with ./scripts/run_all.sh - expected outputs are tabulated in the README.", {
+  x: 0.9, y: 3.6, w: 11.5, h: 0.9, fontFace: BODY, fontSize: 14, color: ICE, align: "center", margin: 0, isTextBox: true });
+s.addNotes("Appendix divider - the talk ends at the previous slide.");
+
+function tbl(slide, x, y, w, colW, header, rows, fs) {
+  const hdr = header.map(h => ({ text: h, options: { bold: true, color: INK, fill: { color: PANEL }, fontFace: HEAD, fontSize: fs - 1 } }));
+  const body = rows.map(r => r.map(c => ({ text: c, options: { color: MUT, fontFace: BODY, fontSize: fs } })));
+  slide.addTable([hdr].concat(body), { x, y, w, colW, border: { type: "solid", color: RULE, pt: 0.5 }, margin: 0.05, valign: "middle" });
+}
+
+// A1 — main results
+s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Appendix" });
+s.addText("A1 - Main results (layer1.0.conv1, 115,605,504 MACs)", { placeholder: "title" });
+tbl(s, 0.7, 1.45, 12.0, [2.7, 2.5, 1.6, 1.4, 1.9, 1.9],
+  ["config", "dynamic instructions", "instr/MAC", "step", "cumulative", "mismatches"],
+  [["B0  naive C, -O2", "824,959,988", "7.13", "-", "1.00x", "0 / 200,704"],
+   ["B1  tile4 + unroll8", "413,848,076", "3.57", "1.99x", "1.99x", "0 / 200,704"],
+   ["X1  + xqdot8", "75,926,769", "0.657", "5.45x", "10.86x", "0 / 200,704"],
+   ["X2  + xqdot8 + xrq", "73,267,673", "0.634", "1.036x", "11.26x", "0 / 200,704"]], 12);
+s.addText([
+  { text: "Complete residual block (E8): conv1 69,554,877 + conv2 69,554,877 + quantized add 3,612,690 instructions - 0 mismatches at every stage vs TFLite", options: { bullet: true, breakLine: true } },
+  { text: "Microbenchmark (E1): 1,548 instructions / 192 MACs = 8.06/MAC - matches the static loop count (192 x 8 + 12 call overhead)", options: { bullet: true, breakLine: true } },
+  { text: "Kernel code size: B0 476 B - B1 1,320 B - X1 860 B - X2 650 B (the extension halves the optimized kernel)", options: { bullet: true, breakLine: true } },
+  { text: "Target: >=2x dynamic-instruction reduction - achieved 5.6x vs B1 (the optimized baseline), 11.3x vs naive", options: { bullet: true } },
+], { x: 0.7, y: 4.35, w: 12.0, h: 2.4, fontFace: BODY, fontSize: 12.5, color: MUT, paraSpaceAfter: 7, margin: 0, isTextBox: true });
+s.addNotes("Backup - full result table.");
+
+// A2 — instruction mix + utilization
+s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Appendix" });
+s.addText("A2 - Instruction mix and custom-instruction utilization (E7)", { placeholder: "title" });
+tbl(s, 0.7, 1.45, 8.2, [2.4, 1.45, 1.45, 1.45, 1.45],
+  ["class (% of retired)", "B0", "B1", "X1", "X2"],
+  [["int ALU", "43.0", "34.3", "42.8", "41.4"],
+   ["load", "28.3", "35.6", "26.9", "27.7"],
+   ["scalar multiply", "14.1", "28.1", "0.3", "0.0"],
+   ["XQDOT8", "-", "-", "19.4", "20.1"],
+   ["XRQ", "-", "-", "-", "0.3"],
+   ["branch", "14.3", "1.5", "8.0", "7.8"],
+   ["store", "0.2", "0.5", "2.7", "2.8"]], 12);
+s.addText([
+  { text: "Utilization is exact by count: XQDOT8 retired = MACs/8 precisely (258,048 per measured row; 14,450,688 per layer); XRQ = 1 per output element (3,584)", options: { bullet: true, breakLine: true } },
+  { text: "Scalar multiplies: 2,068,136 -> 168. The identical count in B0 and B1 proves same arithmetic, different wrapping; the 168 residue is address computation", options: { bullet: true, breakLine: true } },
+  { text: "Method: one-output-row runs (mix is loop-invariant), commit log PC-filtered to the kernel symbol. Whole-program traces are invalid here: the HTIF output poll loop dominates them", options: { bullet: true, breakLine: true } },
+  { text: "After X2, loads + address arithmetic ~70% of retired instructions: the measured next bottleneck", options: { bullet: true } },
+], { x: 9.2, y: 1.45, w: 3.5, h: 5.2, fontFace: BODY, fontSize: 11.5, color: MUT, paraSpaceAfter: 8, margin: 0, isTextBox: true });
+s.addNotes("Backup - required mix metric and utilization, measured.");
+
+// A3 — requantization semantics, empirically derived
+s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Appendix" });
+s.addText("A3 - Requantization semantics, derived to bit-exactness (E2)", { placeholder: "title" });
+tbl(s, 0.7, 1.45, 9.6, [5.2, 2.2, 2.2],
+  ["candidate rounding rule", "mismatches (1 conv)", "all 20 convs"],
+  [["two-step gemmlowp (SRDHM + RDBPOT), floor variant", "130 / 200,704 (+1)", "-"],
+   ["two-step gemmlowp, truncating variant", "130 / 200,704 (+1)", "-"],
+   ["SINGLE rounding: rdbpot(acc x M0, 31+rs)  [adopted]", "0", "0 / 2,183,168"]], 12);
+s.addText([
+  { text: "The +1 pattern is a double-rounding artifact: the textbook two-step rounds twice; TFLite's conv backend rounds once", options: { bullet: true, breakLine: true } },
+  { text: "TFLite is internally inconsistent: its FC layer uses a different backend (ruy) with different rounding. We implement the conv semantics only - the cheaper datapath - accepting <=3 of 1000 FC logits off by +-1 (argmax unaffected)", options: { bullet: true, breakLine: true } },
+  { text: "xrq rd, rs1, rs2:  rd = clamp_int8( rdbpot(acc x M0, shift) + zp ), with M0 | shift | zp packed per channel into rs2 offline. The original CSR-parameter design was corrected when measurement showed pixel-outermost loops make CSR writes fire per output", options: { bullet: true, breakLine: true } },
+  { text: "The residual add's output stage reuses xrq unchanged - the primitive generalizes beyond convolution (E8)", options: { bullet: true } },
+], { x: 0.7, y: 3.35, w: 12.0, h: 3.4, fontFace: BODY, fontSize: 12.5, color: MUT, paraSpaceAfter: 8, margin: 0, isTextBox: true });
+s.addNotes("Backup - the empirical rounding derivation.");
+
+// A4 — design-space analysis
+s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Appendix" });
+s.addText("A4 - ISA design space: the three-operand problem", { placeholder: "title" });
+tbl(s, 0.7, 1.45, 12.0, [1.0, 3.1, 4.4, 3.5],
+  ["opt", "form", "modifications to the existing core", "assessment"],
+  [["A", "xqmac8 rd += dot8(rs1,rs2)", "3rd register-file read port + forwarding/hazard extension", "best density (~0.28 instr/MAC); deferred to RTL as a measured increment"],
+   ["B", "R4-type with explicit rs3", "same as A, nonstandard integer format", "dominated by A - rejected"],
+   ["C", "accumulators inside the unit", "none, but new architectural state + move instructions", "self-contained; compiler cannot allocate accumulators"],
+   ["D", "xqdot8 rd = dot8(rs1,rs2)", "NONE - 2-read/1-write like mul; add accumulates", "CHOSEN: zero core surgery; ~45% more loop instructions than A, still 5.6x"]], 11.5);
+s.addText([
+  { text: "Choice rationale: (i) risk - additions fail their own tests loudly, modifications to the register file and bypass network fail silently and late; (ii) sufficiency - D already exceeds the 2x target by 2.8x; (iii) method - A becomes the RTL phase's measured increment, priced by synthesis", options: { bullet: true, breakLine: true } },
+  { text: "Latency bonus of D: consecutive xqdot8 results are independent (only cheap adds chain), so a multi-cycle unit pipelines without stalls", options: { bullet: true } },
+], { x: 0.7, y: 4.6, w: 12.0, h: 2.1, fontFace: BODY, fontSize: 12.5, color: MUT, paraSpaceAfter: 8, margin: 0, isTextBox: true });
+s.addNotes("Backup - design-space analysis and the documented choice.");
+
+// A5 — methodology and reproducibility
+s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Appendix" });
+s.addText("A5 - Measurement methodology and reproducibility", { placeholder: "title" });
+s.addText([
+  { text: "Counts: minstret CSR read around the region of interest - exact, zero overhead, works at full scale. Mixes: commit-log trace, decoded by opcode field, PC-filtered to kernel symbols (noinline keeps them addressable)", options: { bullet: true, breakLine: true } },
+  { text: "The 8.06 baseline is triple-checked: hardware counter (1,548/192), filtered trace (1,541 in-symbol), and static disassembly (8-instruction loop body) agree independently", options: { bullet: true, breakLine: true } },
+  { text: "Correctness chain, each link bit-exact (0 mismatches): TFLite interpreter (deployed model, fusing delegate disabled) -> NumPy reference (the spec) -> bare-metal C -> Spike custom instructions", options: { bullet: true, breakLine: true } },
+  { text: "Instruction verification: directed corners (saturation, lane isolation, shift/zp bounds) + 20,000 random vectors per instruction vs independent C references - 40,144 vectors, 0 failures", options: { bullet: true, breakLine: true } },
+  { text: "Anti-artifact hygiene: outputs always consumed by checkers; every binary scanned for FP instructions (0, as required); quantized padding fills with the zero point", options: { bullet: true, breakLine: true } },
+  { text: "Reproduce everything: ./scripts/run_all.sh (add --with-mix for E7). Environment: xPack riscv-none-elf-gcc 15.2, Spike @1960943 + src/spike/custom-insns-spike.patch, -march=rv64imc_zicsr_zifencei -mabi=lp64. Expected outputs: README tables", options: { bullet: true } },
+], { x: 0.7, y: 1.55, w: 12.0, h: 5.3, fontFace: BODY, fontSize: 13, color: MUT, paraSpaceAfter: 10, margin: 0, isTextBox: true });
+s.addNotes("Backup - how every number was produced and how to reproduce it.");
 
 pres.writeFile({ fileName: "rv64_midterm_slides.pptx" }).then(() => console.log("written"));

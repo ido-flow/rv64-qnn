@@ -1,7 +1,8 @@
 # Accelerating Quantized ResNet-18 Inference on RV64IMC with a Two-Instruction Packed-Integer Extension
 
-*Midterm report — ISA design and Spike implementation.*
-*(Working draft in Markdown; typeset to the course template before submission.)*
+*Working draft retained as the base for the FINAL report. Per course update
+(27 Oct 2026) no separate midterm report is submitted — the midterm's
+experimental results and analysis live in the slides (talk + appendix A1-A5).*
 
 ---
 

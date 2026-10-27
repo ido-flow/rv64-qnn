@@ -6,3 +6,4 @@ results/*.log
 .DS_Store
 node_modules/
 ~$*
+docs/slides/speaker_notes.md

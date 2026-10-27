@@ -55,8 +55,8 @@ either the AI's or my own reasoning.
 - **2026-10-19→ — report review.** Section-by-section review of the drafted
   report, including correcting my own initial reasoning on baseline choice
   (B1 vs B0 comparison) during the process; an unverified code-size estimate
-  found during this review was replaced with measured values (commit
-  4a8a20a).
+  found during this review was replaced with measured values (git
+  history: the code-size correction commit).
 
 ## Verification of my understanding
 

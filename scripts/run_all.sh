@@ -11,6 +11,8 @@
 set -e
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
+# toolchain + spike on PATH (adjust the xPack path if your install differs)
+export PATH="$HOME/riscv/bin:$HOME/Library/xPacks/@xpack-dev-tools/riscv-none-elf-gcc/15.2.0-1.1/.content/bin:$PATH"
 
 echo "==[1/5] golden references regenerated from the .tflite =="
 python3 scripts/export_layer.py
