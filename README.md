@@ -35,6 +35,25 @@ results/              raw measurement output; never hand-edited
 experiments/          benchmark configurations per level (micro/operator/model)
 ```
 
+## Expected measurements (what a correct run prints)
+
+One command reproduces everything: `./scripts/run_all.sh` (add `--with-mix`
+for the instruction-mix profile). Expected results, as retired-instruction
+counts from Spike's `minstret`:
+
+| command | expected output |
+|---|---|
+| `./scripts/run_b0.sh` | reference=96128 spike=96128 MATCH; 1,548 instr / 192 MACs (8.06/MAC) |
+| `make run-test` | isa_test: 40,144 vectors, 0 failures — ALL PASS |
+| `make run-conv` | B0 824,959,988 · B1 413,848,076 · X1 75,926,769 · X2 73,267,673 instr; mismatches = 0 on all four; ratios B0/B1=1.99x, B1/X1=5.45x, X1/X2=1.036x, B0/X2=11.26x |
+| `make run-block` | conv1 69,554,877 · conv2 69,554,877 · add 3,612,690 instr; 0 mismatches each; BLOCK COMPLETE |
+| `./scripts/run_mix.sh` | per-kernel mix (results/mix.txt); X2: XQDOT8 = 258,048 (= MACs/8 exactly), XRQ = 3,584 (= 1/output) |
+| `python3 scripts/ref_sweep.py` | conv mismatches: 0 · FC deviation: 3 (expected, documented) — SPEC HOLDS |
+
+Spike setup: apply `src/spike/custom-insns-spike.patch` to riscv-isa-sim
+(commit 1960943), rebuild, install. Toolchain: xPack riscv-none-elf-gcc,
+`-march=rv64imc_zicsr_zifencei -mabi=lp64`.
+
 ## Status / key numbers so far
 
 | what | value |
