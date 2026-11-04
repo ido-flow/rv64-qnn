@@ -3,7 +3,7 @@ const pptxgen = require("pptxgenjs");
 const pres = new pptxgen();
 pres.layout = "LAYOUT_WIDE";                   // 13.33 x 7.5
 pres.author = "Ido Ifergan";
-pres.title  = "Eight MACs per Instruction";
+pres.title  = "Quantized NN Acceleration on RV64IMC";
 
 // palette (project identity: copper interconnect on ink/steel)
 const INK = "161B26", STEEL = "3D5A80", COPPER = "A9552A", LTCOP = "E08C57";
@@ -52,9 +52,9 @@ let s = pres.addSlide({ masterName: "DARK", sectionTitle: "Problem" });
 regStrip(s, 2.07, 0.85, 9.2, ["a7","a6","a5","a4","a3","a2","a1","a0"], "243048", LTCOP);
 s.addText("one 64-bit register = eight INT8 values", { x: 2.07, y: 1.42, w: 9.2, h: 0.3,
   fontFace: MONO, fontSize: 11, color: GREY, align: "center", margin: 0, isTextBox: true });
-s.addText("Eight MACs per Instruction", { x: 0.9, y: 2.35, w: 11.5, h: 1.1,
-  fontFace: HEAD, fontSize: 48, bold: true, color: WHITE, align: "center", margin: 0, isTextBox: true });
-s.addText("Accelerating quantized ResNet-18 inference on RV64IMC\nMidterm: ISA design and Spike implementation", {
+s.addText("Quantized NN Acceleration on RV64IMC", { x: 0.9, y: 2.35, w: 11.5, h: 1.1,
+  fontFace: HEAD, fontSize: 40, bold: true, color: WHITE, align: "center", margin: 0, isTextBox: true });
+s.addText("eight MACs per instruction: custom ISA extensions xqdot8 + xrq\nMidterm: ISA design and Spike implementation", {
   x: 0.9, y: 3.55, w: 11.5, h: 0.85, fontFace: BODY, fontSize: 17, color: ICE, align: "center", margin: 0, isTextBox: true });
 [["5.6x", "vs optimized software"], ["bit-exact", "vs the deployed model"], ["40,144", "test vectors, 0 failures"]].forEach(([b, t], i) => {
   const x = 2.26 + i * 3.1;
